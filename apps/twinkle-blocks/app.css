@@ -4,8 +4,8 @@
 .brand { font-size: 22px; flex-grow: 1; }
 .play { gap: 18px; justify-content: center; align-items: start; }
 .board { display: grid; grid-template-columns: repeat(10, 28px); gap: 2px; padding: 8px; background: #263845; border: 2px solid #496274; border-radius: 8px; }
-.cell { width: 28px; height: 28px; background: #17242d; border-radius: 3px; }
-.cell.filled { background: var(--accent); border: 2px solid #d3fff8; }
+.cell { width: 28px; height: 28px; background: #17242d; border: 2px solid transparent; border-radius: 3px; }
+.cell.filled { background: var(--accent); border-color: #d3fff8; }
 .cell.c0 { background: #f4d35e; border-color: #fff4bc; }
 .cell.c1 { background: #4cc9f0; border-color: #d2f6ff; }
 .cell.c2 { background: #b388ff; border-color: #efe2ff; }

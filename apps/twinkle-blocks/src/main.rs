@@ -9,7 +9,7 @@ use twinkle_protocol::SurfaceBounds;
 use twinkle_ui::{
     Application, ApplicationControllerEvent, ApplicationControllerInput, ControllerAxis,
     ControllerButton, ControllerFamily, ControllerId, ControllerInputOutcome, ControllerSnapshot,
-    KeyEdge, Shortcut, ShortcutOutcome, View, ViewContext,
+    KeyEdge, Shortcut, ShortcutOutcome, UiId, View, ViewContext,
 };
 
 const W: usize = 10;
@@ -233,6 +233,7 @@ struct Blocks {
     gravity_elapsed: Duration,
     horizontal_direction: i8,
     horizontal_elapsed: Duration,
+    changed_view_ids: Option<Vec<UiId>>,
 }
 
 impl Blocks {
@@ -271,6 +272,7 @@ impl Blocks {
             gravity_elapsed: Duration::ZERO,
             horizontal_direction: 0,
             horizontal_elapsed: Duration::ZERO,
+            changed_view_ids: None,
         })
     }
 
@@ -278,6 +280,7 @@ impl Blocks {
         self.runtime.begin_transaction()?;
         let result: Result<RetainedPanelTree, String> = (|| {
             let mut candidate = self.accepted.clone();
+            self.changed_view_ids = None;
             match self
                 .runtime
                 .reconcile_data_patched(self.game.snapshot(self.menu_open))?
@@ -288,21 +291,26 @@ impl Blocks {
                     transport_bytes,
                     ..
                 } => {
-                    candidate.apply_patch(
-                        &patch,
-                        &self.bounds,
-                        Some("main"),
-                        &self.stylesheet,
-                        candidate.generation() + 1,
-                        transport_bytes,
-                    )?;
+                    self.changed_view_ids = candidate
+                        .changed_element_ids(&patch)
+                        .map(|ids| ids.into_iter().map(UiId::from).collect());
+                    let generation = candidate.generation() + 1;
+                    candidate = candidate
+                        .apply_patch_owned(
+                            &patch,
+                            &self.bounds,
+                            Some("main"),
+                            &self.stylesheet,
+                            generation,
+                            transport_bytes,
+                        )?
+                        .0;
                     self.runtime.finish_patch_render(true)?;
                 }
             }
             if !self.runtime.take_effects()?.is_empty() {
                 return Err("external game-state reconciliation emitted an effect".into());
             }
-            self.runtime.finish_event(true)?;
             Ok(candidate)
         })();
         self.runtime.finish_transaction(result.is_ok())?;
@@ -322,14 +330,17 @@ impl Blocks {
                 .runtime
                 .dispatch_batch_patched(vec![json!([action, null])], false)?
             {
-                candidate.apply_patch(
-                    &patch,
-                    &self.bounds,
-                    Some("main"),
-                    &self.stylesheet,
-                    candidate.generation() + 1,
-                    transport_bytes,
-                )?;
+                let generation = candidate.generation() + 1;
+                candidate = candidate
+                    .apply_patch_owned(
+                        &patch,
+                        &self.bounds,
+                        Some("main"),
+                        &self.stylesheet,
+                        generation,
+                        transport_bytes,
+                    )?
+                    .0;
                 self.runtime.finish_patch_render(true)?;
             }
             let effects = self.runtime.take_effects()?;
@@ -609,6 +620,10 @@ impl Application for Blocks {
     }
     fn title(&self) -> &str {
         "Twinkle Blocks"
+    }
+
+    fn take_changed_view_ids(&mut self) -> Option<Vec<UiId>> {
+        self.changed_view_ids.take()
     }
 }
 

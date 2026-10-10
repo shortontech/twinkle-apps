@@ -2,11 +2,12 @@
 import './app.css';
 
 const act = (action: string) => twinkle.request({action});
+const Cell = memo(function Cell({color}: {color: string}) {
+    return <Div className={color ? 'cell filled ' + color : 'cell'} />;
+});
 
 export default function App() {
     const board = (twinkle.data.board as string[]) || [];
-    const cell = (color: string, index: number) =>
-        <Div key={index} className={color ? 'cell filled ' + color : 'cell'} />;
     if (twinkle.data.menuOpen || twinkle.data.over) {
         return <Window id="main" width={800} height={720} title="Twinkle Blocks" background={0xff101820}>
             <Column className="menu-screen">
@@ -29,7 +30,7 @@ export default function App() {
                 <Text className="menu-hint">Start / Esc: game menu</Text>
             </Row>
             <Row className="play">
-                <div className="board" role="group" aria-label="Game board">{board.map(cell)}</div>
+                <div className="board" role="group" aria-label="Game board">{board.map((color, index) => <Cell key={index} color={color} />)}</div>
                 <Column className="side">
                     <Text className={twinkle.data.over ? 'status game-over' : 'status'}>{String(twinkle.data.message || '')}</Text>
                     <Text>Next</Text>
