@@ -275,17 +275,38 @@ impl Blocks {
     }
 
     fn render(&mut self) -> Result<(), String> {
-        self.runtime
-            .set_data_value(self.game.snapshot(self.menu_open))?;
-        let next = render_retained_panel(
-            &mut self.runtime,
-            &self.bounds,
-            Some("main"),
-            "__twinkleRender()",
-            self.accepted.generation() + 1,
-        )?;
-        next.validate_candidate(next.source(), &self.bounds, Some("main"), &self.stylesheet)?;
-        self.accepted = next;
+        self.runtime.begin_transaction()?;
+        let result: Result<RetainedPanelTree, String> = (|| {
+            let mut candidate = self.accepted.clone();
+            match self
+                .runtime
+                .reconcile_data_patched(self.game.snapshot(self.menu_open))?
+            {
+                ScheduledPatch::Unchanged => {}
+                ScheduledPatch::Patched {
+                    patch,
+                    transport_bytes,
+                    ..
+                } => {
+                    candidate.apply_patch(
+                        &patch,
+                        &self.bounds,
+                        Some("main"),
+                        &self.stylesheet,
+                        candidate.generation() + 1,
+                        transport_bytes,
+                    )?;
+                    self.runtime.finish_patch_render(true)?;
+                }
+            }
+            if !self.runtime.take_effects()?.is_empty() {
+                return Err("external game-state reconciliation emitted an effect".into());
+            }
+            self.runtime.finish_event(true)?;
+            Ok(candidate)
+        })();
+        self.runtime.finish_transaction(result.is_ok())?;
+        self.accepted = result?;
         Ok(())
     }
 
