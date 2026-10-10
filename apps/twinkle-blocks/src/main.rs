@@ -2,17 +2,14 @@ use serde_json::{Value, json};
 use std::time::Duration;
 use twinkle_jsx_runtime::{JsxModuleGraph, JsxRuntime, ModuleSource, ScheduledPatch};
 use twinkle_presentation::{
-    components::{
-        PanelNode, PluginImages, PluginMessage, RetainedPanelTree, render_retained_panel,
-    },
+    components::{PluginImages, PluginMessage, RetainedPanelTree, render_retained_panel},
     css::StyleSheet,
 };
 use twinkle_protocol::SurfaceBounds;
 use twinkle_ui::{
     Application, ApplicationControllerEvent, ApplicationControllerInput, ControllerAxis,
     ControllerButton, ControllerFamily, ControllerId, ControllerInputOutcome, ControllerSnapshot,
-    FrameOverlay, KeyEdge, OverlayAnchor, OverlayId, OverlayMenu, Shortcut, ShortcutOutcome, UiId,
-    View, ViewContext,
+    KeyEdge, Shortcut, ShortcutOutcome, View, ViewContext,
 };
 
 const W: usize = 10;
@@ -232,8 +229,6 @@ struct Blocks {
     images: PluginImages,
     game: Game,
     menu_open: bool,
-    pending_menu_open: bool,
-    pending_menu_close: bool,
     axis_x: i8,
     gravity_elapsed: Duration,
     horizontal_direction: i8,
@@ -272,8 +267,6 @@ impl Blocks {
             images: Default::default(),
             game: Game::default(),
             menu_open: false,
-            pending_menu_open: false,
-            pending_menu_close: false,
             axis_x: 0,
             gravity_elapsed: Duration::ZERO,
             horizontal_direction: 0,
@@ -343,17 +336,11 @@ impl Blocks {
         if let Some(action) = action {
             if action == "menu" {
                 self.menu_open = !self.menu_open;
-                self.pending_menu_open = self.menu_open;
-                self.pending_menu_close = !self.menu_open;
-                if self.menu_open {
-                    self.axis_x = 0;
-                    self.horizontal_direction = 0;
-                    self.horizontal_elapsed = Duration::ZERO;
-                }
-            } else if action == "toggle" || action == "restart" {
+                self.axis_x = 0;
+                self.horizontal_direction = 0;
+                self.horizontal_elapsed = Duration::ZERO;
+            } else if action == "restart" {
                 self.menu_open = false;
-                self.pending_menu_open = false;
-                self.pending_menu_close = true;
                 self.game.act(&action);
                 self.axis_x = 0;
                 self.gravity_elapsed = Duration::ZERO;
@@ -397,10 +384,17 @@ impl Application for Blocks {
             if repeat {
                 return ControllerInputOutcome::handled(false);
             }
-            let Some(action) = self.accepted.node().button_action("game-menu-button") else {
+            if self.game.over {
                 return ControllerInputOutcome::handled(false);
-            };
-            self.update(PluginMessage::Click(action));
+            }
+            self.menu_open = !self.menu_open;
+            self.axis_x = 0;
+            self.horizontal_direction = 0;
+            self.horizontal_elapsed = Duration::ZERO;
+            if let Err(error) = self.render() {
+                eprintln!("Game-menu render failed: {error}");
+                return ControllerInputOutcome::handled(false);
+            }
             return ControllerInputOutcome::handled(true);
         }
         if let Input::Button {
@@ -484,6 +478,17 @@ impl Application for Blocks {
     }
 
     fn shortcut_outcome(&mut self, shortcut: Shortcut) -> ShortcutOutcome {
+        if shortcut == Shortcut::Escape {
+            if self.game.over {
+                return ShortcutOutcome::from_changed(false);
+            }
+            self.menu_open = !self.menu_open;
+            self.axis_x = 0;
+            self.horizontal_direction = 0;
+            self.horizontal_elapsed = Duration::ZERO;
+            let changed = self.render().is_ok();
+            return ShortcutOutcome::from_changed(changed);
+        }
         if self.menu_open {
             return ShortcutOutcome::from_changed(false);
         }
@@ -493,12 +498,11 @@ impl Application for Blocks {
             Shortcut::Back => Some("left"),
             Shortcut::Forward => Some("right"),
             Shortcut::Submit => Some("drop"),
-            Shortcut::Escape => Some("toggle"),
             Shortcut::Reload => Some("restart"),
             _ => None,
         };
         if let Some(action) = action {
-            if (self.game.paused || self.game.over) && action != "toggle" && action != "restart" {
+            if (self.game.paused || self.game.over) && action != "restart" {
                 return ShortcutOutcome::from_changed(false);
             }
             self.game.act(action);
@@ -581,56 +585,6 @@ impl Application for Blocks {
     }
     fn view(&self, _context: ViewContext) -> impl View<PluginMessage> {
         self.accepted.node().view(&self.images, &self.stylesheet)
-    }
-    fn frame_overlays(&self, _context: ViewContext) -> Vec<FrameOverlay<PluginMessage>> {
-        let mut transients = Vec::new();
-        self.accepted.node().transients(&mut transients);
-        transients
-            .into_iter()
-            .filter_map(|node| {
-                let PanelNode::Menu {
-                    id,
-                    anchor,
-                    point,
-                    open: true,
-                    items,
-                    ..
-                } = node
-                else {
-                    return None;
-                };
-                let target = UiId::from(anchor.as_str());
-                let anchor = point.as_ref().map_or_else(
-                    || OverlayAnchor::Node(target.clone()),
-                    |point| OverlayAnchor::Point {
-                        invocation_target: target.clone(),
-                        point: *point,
-                    },
-                );
-                let menu = items
-                    .iter()
-                    .filter_map(PanelNode::overlay_menu_item)
-                    .fold(OverlayMenu::new(id.as_str(), anchor), OverlayMenu::item);
-                Some(FrameOverlay::Menu(
-                    self.accepted
-                        .node()
-                        .style_overlay_menu_for(id, menu, &self.stylesheet),
-                ))
-            })
-            .collect()
-    }
-    fn transient_dismissed(&self, id: &OverlayId) -> Option<PluginMessage> {
-        (id == &OverlayId::new("game-menu"))
-            .then(|| self.accepted.node().button_action("game-menu-button"))
-            .flatten()
-            .map(PluginMessage::Click)
-    }
-    fn take_transient_request(&mut self) -> Option<(OverlayId, UiId)> {
-        std::mem::take(&mut self.pending_menu_open)
-            .then(|| (OverlayId::new("game-menu"), UiId::from("game-menu-button")))
-    }
-    fn take_transient_dismissal(&mut self) -> Option<OverlayId> {
-        std::mem::take(&mut self.pending_menu_close).then(|| OverlayId::new("game-menu"))
     }
     fn title(&self) -> &str {
         "Twinkle Blocks"
@@ -730,10 +684,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .into());
             }
-            app.accepted
-                .node()
-                .button_action("game-menu-button")
-                .ok_or("JSX menu anchor button is missing")?;
+            if app.accepted.node().button_action("continue").is_some()
+                || app.accepted.node().button_action("restart").is_none()
+            {
+                return Err("game over did not present New game without Continue".into());
+            }
             let start = || ApplicationControllerEvent {
                 device: ControllerId(1),
                 family: ControllerFamily::Xbox,
@@ -746,33 +701,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
             };
             let outcome = app.controller_input(start());
+            if outcome.changed || app.menu_open {
+                return Err("controller Start dismissed the terminal game-over screen".into());
+            }
+
+            app = Blocks::new()?;
+            let outcome = app.controller_input(start());
             if !outcome.changed || !app.menu_open {
-                return Err("controller Start did not open the JSX game menu".into());
+                return Err(
+                    "controller Start did not open the conditional game-menu screen".into(),
+                );
             }
-            app.controller_input(start());
-            if app.menu_open {
-                return Err("controller Start did not close the JSX game menu".into());
-            }
-            let menu = app
+            let continue_action = app
                 .accepted
                 .node()
-                .button_action("game-menu-button")
-                .ok_or("JSX menu anchor button disappeared after controller input")?;
-            app.update(PluginMessage::Click(menu));
-            if !app.menu_open {
-                return Err("the JSX game-menu button did not open its menu".into());
-            }
-            let mut declared_transients = Vec::new();
-            app.accepted.node().transients(&mut declared_transients);
-            if !declared_transients
-                .iter()
-                .any(|node| matches!(node, PanelNode::Menu { open: true, .. }))
-            {
-                return Err(format!(
-                    "Rust opened the game menu but JSX did not publish an open transient: {declared_transients:?}"
-                )
-                .into());
-            }
+                .button_action("continue")
+                .ok_or("conditional menu screen is missing its Continue action")?;
             let mut host = twinkle_ui::UiHost::new(app, 800, 720);
             host.step(twinkle_ui::HostBatch {
                 application_changed: true,
@@ -784,8 +728,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .any(|node| node.name.as_deref() == Some("New game"))
             {
                 return Err(format!(
-                    "the open JSX game menu was not presented as a native overlay: failures={:?}, semantics={:?}",
-                    host.inspect().overlay_failures,
+                    "the conditional JSX game menu did not expose its actions: semantics={:?}",
                     host.semantic_nodes()
                         .iter()
                         .filter_map(|node| node.name.as_deref())
@@ -793,21 +736,45 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 )
                 .into());
             }
+            host.application_mut()
+                .update(PluginMessage::Click(continue_action));
+            host.step(twinkle_ui::HostBatch {
+                application_changed: true,
+                ..twinkle_ui::HostBatch::default()
+            });
+            if host.application().menu_open
+                || host
+                    .semantic_nodes()
+                    .iter()
+                    .any(|node| node.name.as_deref() == Some("Continue"))
+            {
+                return Err("Continue did not replace the menu with gameplay".into());
+            }
             let mut controller_host = twinkle_ui::UiHost::new(Blocks::new()?, 800, 720);
             let outcome = controller_host.handle_application_controller_input(start());
             if !outcome.changed
-                || controller_host.inspect().open_overlay != Some(OverlayId::new("game-menu"))
+                || !controller_host.application().menu_open
                 || !controller_host
                     .semantic_nodes()
                     .iter()
                     .any(|node| node.name.as_deref() == Some("New game"))
             {
+                return Err("physical controller Start did not present the menu screen".into());
+            }
+            controller_host.handle_application_controller_input(start());
+            if controller_host.application().menu_open
+                || controller_host.inspect().controller_target.is_some()
+                || controller_host
+                    .semantic_nodes()
+                    .iter()
+                    .any(|node| node.name.as_deref() == Some("Continue"))
+            {
                 return Err(
-                    "physical controller Start did not present the native game-menu overlay".into(),
+                    "closing the menu retained menu focus instead of returning to gameplay".into(),
                 );
             }
             println!(
-                "JSX render survived {ticks} gravity ticks and presented its native game menu."
+                "JSX render survived {ticks} gravity ticks and switched cleanly between gameplay and its menu screen."
             );
             Ok(())
         }

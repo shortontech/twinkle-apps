@@ -7,16 +7,26 @@ export default function App() {
     const board = (twinkle.data.board as string[]) || [];
     const cell = (color: string, index: number) =>
         <Div key={index} className={color ? 'cell filled ' + color : 'cell'} />;
+    if (twinkle.data.menuOpen || twinkle.data.over) {
+        return <Window id="main" width={800} height={720} title="Twinkle Blocks" background={0xff101820}>
+            <Column className="menu-screen">
+                <Text className="menu-title">{twinkle.data.over ? 'Game over' : 'Twinkle Blocks'}</Text>
+                <Text className="menu-score">{'Score ' + twinkle.data.score + '  ·  Lines ' + twinkle.data.lines + '  ·  Level ' + twinkle.data.level}</Text>
+                <Column className="menu-card">
+                    {!twinkle.data.over && <Button className="menu-action primary" id="continue" onClick={() => act('menu')}>Continue</Button>}
+                    <Button className="menu-action" id="restart" onClick={() => act('restart')}>New game</Button>
+                    <Text className="menu-help">D-pad or left stick: move and soft drop</Text>
+                    <Text className="menu-help">A: rotate · B: hard drop · Start: resume</Text>
+                </Column>
+            </Column>
+        </Window>;
+    }
     return <Window id="main" width={800} height={720} title="Twinkle Blocks" background={0xff101820}>
         <Column className="app">
             <Row className="topbar">
                 <Text className="brand">Twinkle Blocks</Text>
                 <Text>{'Score ' + twinkle.data.score + '  ·  Lines ' + twinkle.data.lines + '  ·  Level ' + twinkle.data.level}</Text>
-                <Button className="action" id="game-menu-button" onClick={() => act('menu')}>Game menu</Button>
-                <Menu id="game-menu" anchor="game-menu-button" open={Boolean(twinkle.data.menuOpen)}>
-                    <MenuItem id="toggle" label={twinkle.data.paused ? 'Start' : 'Pause'} onClick={() => act('toggle')} />
-                    <MenuItem id="restart" label="New game" onClick={() => act('restart')} />
-                </Menu>
+                <Text className="menu-hint">Start / Esc: game menu</Text>
             </Row>
             <Row className="play">
                 <div className="board" role="group" aria-label="Game board">{board.map(cell)}</div>
@@ -25,11 +35,6 @@ export default function App() {
                     <Text>Next</Text>
                     <Div className="next-piece"><Div className="next-block" /></Div>
                     <Text>Controls</Text>
-                    <Button className="action" id="move-left" onClick={() => act('left')}>Move left</Button>
-                    <Button className="action" id="move-right" onClick={() => act('right')}>Move right</Button>
-                    <Button className="action" id="rotate" onClick={() => act('rotate')}>Rotate</Button>
-                    <Button className="action" id="soft-drop" onClick={() => act('down')}>Soft drop</Button>
-                    <Button className="action" id="hard-drop" onClick={() => act('drop')}>Hard drop</Button>
                     <Text className="hint">D-pad / left stick: move and drop · A: rotate · B: hard drop · Start: game menu. Keyboard: ↑/↓, Alt+←/→, Enter, Escape.</Text>
                 </Column>
             </Row>
