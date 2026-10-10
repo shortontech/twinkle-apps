@@ -1,0 +1,11 @@
+[workspace]
+resolver = "3"
+members = ["apps/twinkle-notes"]
+
+[workspace.package]
+edition = "2024"
+license = "MIT OR Apache-2.0"
+rust-version = "1.96"
+
+[workspace.dependencies]
+twinkle-ui = { path = "../twinkle/crates/twinkle" }
