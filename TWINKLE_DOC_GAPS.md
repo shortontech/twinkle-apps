@@ -87,3 +87,81 @@ when the documentation did not resolve the question.
   typing in a text field that was clicked changes it to the keyboard focus
   treatment. The docs do not explain this distinction or whether pointer focus
   should remain visually neutral during text entry.
+
+## 2026-10-10 — Small-window layout clipping
+
+- Observation: in the supplied screenshot at roughly 600×205 pixels, the file
+  path toolbar is vertically clipped, its action buttons are not visible, and
+  the status line is clipped at the bottom while the editor occupies most of
+  the window.
+- Documentation reviewed: the layout guide explains flex grow/shrink,
+  minimum sizes, and scroll overflow, but does not give guidance for
+  application behavior when a resizable window is much smaller than its
+  content or how to choose a minimum window size.
+- Source searched: `crates/twinkle/src/runtime.rs` for native window sizing
+  and `crates/twinkle/src/ui/tree/layout.rs` for flex and scroll viewport
+  sizing. The runtime creates a resizable window and sets its initial size,
+  without a minimum inner size in this path. The app's editor field has a
+  350-pixel minimum height inside a growing scroll viewport.
+- Finding: the screenshot shows clipping, but source inspection alone does not
+  establish whether the root cause is Twinkle's constrained flex layout or
+  this app's size/minimum choices. The app should be reproduced at the same
+  size with resolved geometry before assigning ownership.
+- Documentation gap: explain small-window overflow expectations, minimum
+  window-size support, and how scroll viewports should interact with minimum
+  content sizes and fixed toolbar/status rows.
+
+## 2026-10-10 — JSX menus, game-state rendering, and timed updates
+
+- Documentation reviewed: `crates/twinkle-presentation/docs/jsx-host.md`,
+  `crates/twinkle-presentation/docs/css.md`, the JSX type declaration guide,
+  and `docs/task-guides.md`'s background-work and direct-controller recipes.
+- Source searched because the guides did not provide the needed recipes:
+  `crates/twinkle-jsx-runtime/src/lib.rs` for publishing app state and event
+  transactions; `crates/twinkle-presentation/src/components.rs` for JSX
+  `Menu`/`MenuItem` shape, anchor semantics, and action conversion; and
+  `crates/twinkle/src/runtime.rs` for application polling cadence.
+- Finding: the JSX host guide describes tree admission and event transactions,
+  but does not show an anchored native JSX menu or how a host republishes an
+  application-owned render buffer. The runtime provides `set_data_value` for
+  app snapshots, while the presentation parser expects `Menu` to name a
+  native anchor control and its children to be `MenuItem` nodes.
+- Finding: the task guide explains that `Application::poll_interval` declares
+  a cadence and `Application::poll` advances app-owned work, but the current
+  background-work section omits those hooks. This app uses them for automatic
+  piece fall without adding a second event loop.
+- Hover note: the first stylesheet validation error was initially mistaken
+  for a rejected `:hover` rule. The offending selector was actually
+  `.topbar > :first-child`; the CSS guide excludes child combinators and
+  arbitrary pseudo-classes such as `:first-child`. A documented
+  `button.action:hover` selector compiles successfully. Pointer-hover appearance
+  still needs a native-window visual check; no hover rendering bug is confirmed.
+- Documentation gap: add an end-to-end JSX example combining a native anchored
+  menu, bounded host effects, and a Rust-owned dynamic display snapshot; also
+  document the polling hooks as the lightweight option for periodic app state.
+
+## 2026-10-10 — Native polling and frame invalidation
+
+- Observation: while testing Twinkle Blocks, the user reported that the app
+  appeared to freeze and then remain frozen. The supplied board image shows
+  locked pieces and a newly spawned piece, so it does not establish that the
+  app had stopped advancing. The current release process remains alive, and
+  the app's in-process validation completed 114 gravity polls through piece
+  locks and a normal game-over transition. A native-window visual/timing check
+  is still needed to determine whether the user's reported freeze reproduces.
+- Documentation reviewed: `docs/task-guides.md` describes
+  `Application::poll_interval` and `Application::poll` as the periodic-update
+  hooks, but does not trace how a deadline becomes a native wakeup and a
+  rendered frame.
+- Source searched because the native scheduling behavior was undocumented:
+  `crates/twinkle/src/runtime.rs` around `UiHost::step`'s `HostEvent::Poll`
+  handling and `NativeRuntime::tick`.
+- Finding: native tick checks `UiHost::next_deadline()`, submits a `Poll` host
+  event when due, and invalidates the presenter scheduler when the resulting
+  host step reports a change. The host invokes `Application::poll()` and
+  refreshes its next application deadline from `poll_interval()`. This path
+  appears to schedule and present changed poll results; inspection alone does
+  not confirm or rule out a runtime timing/rendering defect.
+- Documentation gap: document the native deadline → poll → changed-result
+  invalidation path and how to diagnose an app that remains alive but appears
+  visually frozen.

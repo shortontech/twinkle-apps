@@ -9,10 +9,14 @@ documentation does not give enough information to use an API confidently.
 
 - [`twinkle-notes`](apps/twinkle-notes/README.md): a simple Notepad-style
   multiline text editor with path-based open and save.
+- [`twinkle-blocks`](apps/twinkle-blocks/README.md): a falling-block puzzle
+  exercising a JSX menu, application-owned render buffer, and direct keyboard
+  and controller input.
 
 ## Run
 
-From this repository root, run an app with `cargo run -p twinkle-notes`.
+From this repository root, run an app with `cargo run -p twinkle-notes` or
+`cargo run -p twinkle-blocks`.
 Twinkle's getting-started guide covers the native platform prerequisites.
 
 Documentation gaps and any source searches needed to resolve them are logged
