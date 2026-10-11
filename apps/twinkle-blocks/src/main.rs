@@ -37,6 +37,9 @@ struct Game {
     score: u32,
     lines: u32,
     next: u8,
+    bag: [u8; 7],
+    bag_index: usize,
+    random_state: u32,
     paused: bool,
     over: bool,
 }
@@ -52,6 +55,9 @@ impl Default for Game {
             score: 0,
             lines: 0,
             next: 2,
+            bag: [6, 5, 0, 3, 4, 1, 2],
+            bag_index: 0,
+            random_state: 0x6d2b_79f5,
             paused: false,
             over: false,
         }
@@ -59,6 +65,26 @@ impl Default for Game {
 }
 
 impl Game {
+    fn draw_piece(&mut self) -> u8 {
+        if self.bag_index == self.bag.len() {
+            self.bag = [0, 1, 2, 3, 4, 5, 6];
+            for index in (1..self.bag.len()).rev() {
+                // A tiny deterministic xorshift generator is sufficient here:
+                // the bag supplies the distribution guarantee, while this only
+                // chooses its permutation without adding an application dependency.
+                self.random_state ^= self.random_state << 13;
+                self.random_state ^= self.random_state >> 17;
+                self.random_state ^= self.random_state << 5;
+                let other = self.random_state as usize % (index + 1);
+                self.bag.swap(index, other);
+            }
+            self.bag_index = 0;
+        }
+        let piece = self.bag[self.bag_index];
+        self.bag_index += 1;
+        piece
+    }
+
     fn shape_coords(shape: u8, rotation: u8) -> [(i32, i32); 4] {
         if shape == 0 {
             return SHAPES[0];
@@ -118,7 +144,7 @@ impl Game {
         self.lines += cleared as u32;
         self.score += [0, 100, 300, 500, 800][cleared.min(4)] * (self.level());
         self.shape = self.next;
-        self.next = ((self.next as usize * 5 + self.lines as usize + 3) % 7) as u8;
+        self.next = self.draw_piece();
         self.x = 3;
         self.y = 0;
         self.rotation = 0;
@@ -637,6 +663,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             if timing.level() != 3 || timing.gravity_interval() >= level_one_gravity {
                 return Err("gravity cadence does not accelerate with level".into());
             }
+            let mut bag = Game::default();
+            for _ in 0..2 {
+                let mut seen = [false; 7];
+                for _ in 0..7 {
+                    seen[bag.draw_piece() as usize] = true;
+                }
+                if !seen.into_iter().all(|piece| piece) {
+                    return Err("the seven-piece bag omitted or repeated a shape".into());
+                }
+            }
             let mut square = Game {
                 shape: 0,
                 ..Game::default()
@@ -669,6 +705,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 },
             };
             let mut input_host = twinkle_ui::UiHost::new(Blocks::new()?, 800, 720);
+            let tree = input_host.inspect().resources;
+            println!(
+                "Gameplay component tree: {} bytes ({:.1} KiB), {} resolved nodes, {} retained nodes, {} paint primitives, {} accessibility nodes.",
+                tree.estimated_retained_bytes,
+                tree.estimated_retained_bytes as f64 / 1024.0,
+                tree.node_count,
+                tree.retained_node_count,
+                tree.paint_primitive_count,
+                tree.accessibility_node_count,
+            );
             input_host.handle_application_controller_input(down(KeyEdge::Pressed));
             if input_host
                 .application()
