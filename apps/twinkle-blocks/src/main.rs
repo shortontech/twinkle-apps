@@ -8,6 +8,7 @@ use twinkle_ui::{
 
 const W: usize = 10;
 const H: usize = 20;
+const CELL_COUNT: usize = W * H;
 const SHAPES: [[(i32, i32); 4]; 7] = [
     [(0, 0), (1, 0), (0, 1), (1, 1)],
     [(0, 0), (1, 0), (2, 0), (3, 0)],
@@ -23,7 +24,7 @@ const COLORS: [u32; 7] = [
 
 #[derive(Clone)]
 struct Game {
-    cells: Vec<Option<u8>>,
+    cells: [Option<u8>; CELL_COUNT],
     shape: u8,
     x: i32,
     y: i32,
@@ -41,7 +42,7 @@ struct Game {
 impl Default for Game {
     fn default() -> Self {
         Self {
-            cells: vec![None; W * H],
+            cells: [None; CELL_COUNT],
             shape: 1,
             x: 3,
             y: 0,
@@ -122,19 +123,7 @@ impl Game {
                 self.cells[y as usize * W + x as usize] = Some(self.shape);
             }
         }
-        let mut kept = Vec::with_capacity(H * W);
-        let mut cleared = 0;
-        for row in self.cells.chunks_exact(W) {
-            if row.iter().all(Option::is_some) {
-                cleared += 1;
-            } else {
-                kept.extend_from_slice(row);
-            }
-        }
-        for _ in 0..cleared {
-            kept.splice(0..0, std::iter::repeat_n(None, W));
-        }
-        self.cells = kept;
+        let cleared = self.clear_full_rows();
         self.lines += cleared as u32;
         self.score += [0, 100, 300, 500, 800][cleared.min(4)] * (self.level());
         self.shape = self.next;
@@ -143,6 +132,26 @@ impl Game {
         self.y = 0;
         self.rotation = 0;
         self.over = !self.fits(self.x, self.y, self.rotation);
+    }
+
+    fn clear_full_rows(&mut self) -> usize {
+        let mut write_row = H;
+        let mut cleared = 0;
+        for read_row in (0..H).rev() {
+            let read_start = read_row * W;
+            let row = &self.cells[read_start..read_start + W];
+            if row.iter().all(Option::is_some) {
+                cleared += 1;
+            } else {
+                write_row -= 1;
+                if write_row != read_row {
+                    self.cells
+                        .copy_within(read_start..read_start + W, write_row * W);
+                }
+            }
+        }
+        self.cells[..write_row * W].fill(None);
+        cleared
     }
 
     fn level(&self) -> u32 {
@@ -237,6 +246,7 @@ struct NativeBlocks {
     gravity_elapsed: Duration,
     horizontal_direction: i8,
     horizontal_elapsed: Duration,
+    cell_ids: [UiId; CELL_COUNT],
     changed_view_ids: Option<Vec<UiId>>,
 }
 
@@ -249,14 +259,15 @@ impl Default for NativeBlocks {
             gravity_elapsed: Duration::ZERO,
             horizontal_direction: 0,
             horizontal_elapsed: Duration::ZERO,
+            cell_ids: std::array::from_fn(|index| UiId::from(format!("cell-{index}"))),
             changed_view_ids: None,
         }
     }
 }
 
 impl NativeBlocks {
-    fn board(&self) -> Vec<Option<u8>> {
-        let mut board = self.game.cells.clone();
+    fn board(&self) -> [Option<u8>; CELL_COUNT] {
+        let mut board = self.game.cells;
         for (px, py) in self.game.coords() {
             let (x, y) = (self.game.x + px, self.game.y + py);
             if y >= 0 && y < H as i32 && x >= 0 && x < W as i32 {
@@ -289,7 +300,7 @@ impl NativeBlocks {
             .zip(self.board())
             .enumerate()
             .filter_map(|(index, (before, after))| {
-                (before != after).then(|| UiId::from(format!("cell-{index}")))
+                (before != after).then(|| self.cell_ids[index].clone())
             })
             .collect::<Vec<_>>();
         if before_stats != (self.game.score, self.game.lines, self.game.level()) {
@@ -369,7 +380,7 @@ impl NativeBlocks {
         let cells = self.board().into_iter().enumerate().map(|(index, cell)| {
             let color = cell.map(|shape| COLORS[shape as usize]).unwrap_or(0x17242d);
             let cell_view = Container::new()
-                .id(UiId::from(format!("cell-{index}")))
+                .id(self.cell_ids[index].clone())
                 .width(28.0)
                 .height(28.0)
                 .background(color)
@@ -709,6 +720,16 @@ fn validate() -> Result<(), Box<dyn std::error::Error>> {
         if !seen.into_iter().all(|piece| piece) {
             return Err("the seven-piece bag omitted or repeated a shape".into());
         }
+    }
+    let mut clearing = Game::default();
+    clearing.cells[(H - 2) * W] = Some(3);
+    clearing.cells[(H - 1) * W..].fill(Some(0));
+    clearing.cells[(H - 3) * W..(H - 2) * W].fill(Some(1));
+    if clearing.clear_full_rows() != 2
+        || clearing.cells[(H - 1) * W] != Some(3)
+        || clearing.cells[..(H - 1) * W].iter().any(Option::is_some)
+    {
+        return Err("in-place line clearing did not compact the board correctly".into());
     }
     let mut app = NativeBlocks::default();
     let mut ticks = 0;
