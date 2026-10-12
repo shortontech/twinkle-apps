@@ -9,9 +9,11 @@ information to use an API confidently.
 
 - [`twinkle-notes`](apps/twinkle-notes/README.md): a simple Notepad-style
   multiline text editor with path-based open and save.
-- [`twinkle-blocks`](apps/twinkle-blocks/README.md): a falling-block puzzle
-  exercising a JSX menu, application-owned render buffer, and direct keyboard
-  and controller input.
+- [`twinkle-blocks`](apps/twinkle-blocks/README.md): a Rust-only falling-block
+  puzzle with an application-owned render buffer and direct keyboard and
+  controller input.
+- [`twinkle-blocks-jsx`](apps/twinkle-blocks-jsx/README.md): the equivalent
+  falling-block puzzle with its presentation authored in TSX.
 
 ## Benchmarks
 
@@ -20,8 +22,9 @@ information to use an API confidently.
 
 ## Run
 
-From this repository root, run an app with `cargo run -p twinkle-notes` or
-`cargo run -p twinkle-blocks`, or `cargo run -p iced-blocks`.
+From this repository root, run an app with `cargo run -p twinkle-notes`,
+`cargo run -p twinkle-blocks`, `cargo run -p twinkle-blocks-jsx`, or
+`cargo run -p iced-blocks`.
 Twinkle's getting-started guide covers the native platform prerequisites.
 
 Documentation gaps and any source searches needed to resolve them are logged

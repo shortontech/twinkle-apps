@@ -1,15 +1,9 @@
-use serde_json::{Value, json};
 use std::time::Duration;
-use twinkle_jsx_runtime::{JsxModuleGraph, JsxRuntime, ModuleSource, ScheduledPatch};
-use twinkle_presentation::{
-    components::{PluginImages, PluginMessage, RetainedPanelTree, render_retained_panel},
-    css::StyleSheet,
-};
-use twinkle_protocol::SurfaceBounds;
+use twinkle_ui::prelude::*;
 use twinkle_ui::{
     Application, ApplicationControllerEvent, ApplicationControllerInput, ControllerAxis,
-    ControllerButton, ControllerFamily, ControllerId, ControllerInputOutcome, ControllerSnapshot,
-    KeyEdge, Shortcut, ShortcutOutcome, UiId, View, ViewContext,
+    ControllerButton, ControllerInputOutcome, ControllerSnapshot, KeyEdge, Shortcut,
+    ShortcutOutcome, View, ViewContext,
 };
 
 const W: usize = 10;
@@ -23,8 +17,8 @@ const SHAPES: [[(i32, i32); 4]; 7] = [
     [(1, 0), (2, 0), (0, 1), (1, 1)],
     [(0, 0), (1, 0), (1, 1), (2, 1)],
 ];
-const COLORS: [&str; 7] = [
-    "#f4d35e", "#4cc9f0", "#b388ff", "#80ed99", "#ff9f1c", "#ff5d8f", "#72efdd",
+const COLORS: [u32; 7] = [
+    0xf4d35e, 0x4cc9f0, 0xb388ff, 0x80ed99, 0xff9f1c, 0xff5d8f, 0x72efdd,
 ];
 
 #[derive(Clone)]
@@ -228,31 +222,15 @@ impl Game {
             _ => {}
         }
     }
-
-    fn snapshot(&self, menu_open: bool) -> Value {
-        let mut board: Vec<Option<u8>> = self.cells.clone();
-        for (px, py) in self.coords() {
-            let (x, y) = (self.x + px, self.y + py);
-            if y >= 0 && y < H as i32 && x >= 0 && x < W as i32 {
-                board[y as usize * W + x as usize] = Some(self.shape);
-            }
-        }
-        json!({
-            "board": board.iter().map(|cell| cell.map(|n| format!("c{n}")).unwrap_or_default()).collect::<Vec<_>>(),
-            "next": COLORS[self.next as usize], "score": self.score, "lines": self.lines,
-            "level": self.level(), "paused": self.paused, "over": self.over,
-            "menuOpen": menu_open,
-            "message": if self.over { "Stack topped out" } else if self.paused { "Ready — choose Start" } else { "In play" }
-        })
-    }
 }
 
-struct Blocks {
-    runtime: JsxRuntime,
-    accepted: RetainedPanelTree,
-    bounds: SurfaceBounds,
-    stylesheet: StyleSheet,
-    images: PluginImages,
+#[derive(Clone)]
+enum Message {
+    Continue,
+    Restart,
+}
+
+struct NativeBlocks {
     game: Game,
     menu_open: bool,
     axis_x: i8,
@@ -262,36 +240,9 @@ struct Blocks {
     changed_view_ids: Option<Vec<UiId>>,
 }
 
-impl Blocks {
-    fn new() -> Result<Self, Box<dyn std::error::Error>> {
-        let graph = JsxModuleGraph::new(
-            "app.tsx",
-            [
-                ModuleSource {
-                    path: "app.tsx",
-                    source: include_str!("../app.tsx"),
-                },
-                ModuleSource {
-                    path: "app.css",
-                    source: include_str!("../app.css"),
-                },
-            ],
-        )?;
-        let stylesheet = StyleSheet::compile(&graph.stylesheet()?)?;
-        let bounds = SurfaceBounds::from_json(
-            r#"{"surfaces":[{"id":"main","kind":"window","width":800,"height":720}]}"#,
-        )?;
-        let mut runtime = JsxRuntime::new_modules(&graph, None)?;
-        runtime.set_data_value(Game::default().snapshot(false))?;
-        let accepted =
-            render_retained_panel(&mut runtime, &bounds, Some("main"), "__twinkleRender()", 1)?;
-        accepted.validate_candidate(accepted.source(), &bounds, Some("main"), &stylesheet)?;
-        Ok(Self {
-            runtime,
-            accepted,
-            bounds,
-            stylesheet,
-            images: Default::default(),
+impl Default for NativeBlocks {
+    fn default() -> Self {
+        Self {
             game: Game::default(),
             menu_open: false,
             axis_x: 0,
@@ -299,132 +250,249 @@ impl Blocks {
             horizontal_direction: 0,
             horizontal_elapsed: Duration::ZERO,
             changed_view_ids: None,
-        })
-    }
-
-    fn render(&mut self) -> Result<(), String> {
-        self.runtime.begin_transaction()?;
-        let result: Result<RetainedPanelTree, String> = (|| {
-            let mut candidate = self.accepted.clone();
-            self.changed_view_ids = None;
-            match self
-                .runtime
-                .reconcile_data_patched(self.game.snapshot(self.menu_open))?
-            {
-                ScheduledPatch::Unchanged => {}
-                ScheduledPatch::Patched {
-                    patch,
-                    transport_bytes,
-                    ..
-                } => {
-                    self.changed_view_ids = candidate
-                        .changed_element_ids(&patch)
-                        .map(|ids| ids.into_iter().map(UiId::from).collect());
-                    let generation = candidate.generation() + 1;
-                    candidate = candidate
-                        .apply_patch_owned(
-                            &patch,
-                            &self.bounds,
-                            Some("main"),
-                            &self.stylesheet,
-                            generation,
-                            transport_bytes,
-                        )?
-                        .0;
-                    self.runtime.finish_patch_render(true)?;
-                }
-            }
-            if !self.runtime.take_effects()?.is_empty() {
-                return Err("external game-state reconciliation emitted an effect".into());
-            }
-            Ok(candidate)
-        })();
-        self.runtime.finish_transaction(result.is_ok())?;
-        self.accepted = result?;
-        Ok(())
-    }
-
-    fn dispatch(&mut self, action: usize) -> Result<(), String> {
-        self.runtime.begin_transaction()?;
-        let result: Result<(RetainedPanelTree, Option<String>), String> = (|| {
-            let mut candidate = self.accepted.clone();
-            if let ScheduledPatch::Patched {
-                patch,
-                transport_bytes,
-                ..
-            } = self
-                .runtime
-                .dispatch_batch_patched(vec![json!([action, null])], false)?
-            {
-                let generation = candidate.generation() + 1;
-                candidate = candidate
-                    .apply_patch_owned(
-                        &patch,
-                        &self.bounds,
-                        Some("main"),
-                        &self.stylesheet,
-                        generation,
-                        transport_bytes,
-                    )?
-                    .0;
-                self.runtime.finish_patch_render(true)?;
-            }
-            let effects = self.runtime.take_effects()?;
-            if effects.len() > 1 {
-                return Err("expected at most one game action".into());
-            }
-            let requested: Option<String> = effects
-                .first()
-                .map(|effect| -> Result<String, String> {
-                    if effect.as_object().is_none_or(|object| object.len() != 1) {
-                        return Err("game action contains unexpected properties".into());
-                    }
-                    effect["action"]
-                        .as_str()
-                        .map(str::to_owned)
-                        .ok_or_else(|| "invalid game action".into())
-                })
-                .transpose()?;
-            self.runtime.finish_event(true)?;
-            Ok((candidate, requested))
-        })();
-        self.runtime.finish_transaction(result.is_ok())?;
-        let (candidate, action) = result?;
-        self.accepted = candidate;
-        if let Some(action) = action {
-            if action == "menu" {
-                self.menu_open = !self.menu_open;
-                self.axis_x = 0;
-                self.horizontal_direction = 0;
-                self.horizontal_elapsed = Duration::ZERO;
-            } else if action == "restart" {
-                self.menu_open = false;
-                self.game.act(&action);
-                self.axis_x = 0;
-                self.gravity_elapsed = Duration::ZERO;
-                self.horizontal_direction = 0;
-                self.horizontal_elapsed = Duration::ZERO;
-            }
         }
-        self.render()
     }
 }
 
-impl Application for Blocks {
-    type Message = PluginMessage;
-    fn update(&mut self, message: PluginMessage) {
-        let action = match message {
-            PluginMessage::Click(a)
-            | PluginMessage::Context(a)
-            | PluginMessage::Text(a, _)
-            | PluginMessage::Value(a, _) => Some(a),
-            PluginMessage::Button { click, .. } => Some(click),
-            PluginMessage::Scroll | PluginMessage::Drag(..) | PluginMessage::Drop(..) => None,
-        };
-        if let Some(action) = action {
-            if let Err(error) = self.dispatch(action) {
-                eprintln!("Game action rejected: {error}");
+impl NativeBlocks {
+    fn board(&self) -> Vec<Option<u8>> {
+        let mut board = self.game.cells.clone();
+        for (px, py) in self.game.coords() {
+            let (x, y) = (self.game.x + px, self.game.y + py);
+            if y >= 0 && y < H as i32 && x >= 0 && x < W as i32 {
+                board[y as usize * W + x as usize] = Some(self.game.shape);
             }
+        }
+        board
+    }
+
+    fn reset_input(&mut self) {
+        self.axis_x = 0;
+        self.horizontal_direction = 0;
+        self.horizontal_elapsed = Duration::ZERO;
+    }
+
+    fn mutate_game(&mut self, mutation: impl FnOnce(&mut Game)) {
+        let before_board = self.board();
+        let before_stats = (self.game.score, self.game.lines, self.game.level());
+        let before_next = self.game.next;
+        let before_status = (self.game.paused, self.game.over);
+        mutation(&mut self.game);
+
+        if before_status.1 != self.game.over {
+            self.changed_view_ids = None;
+            return;
+        }
+
+        let mut changed = before_board
+            .into_iter()
+            .zip(self.board())
+            .enumerate()
+            .filter_map(|(index, (before, after))| {
+                (before != after).then(|| UiId::from(format!("cell-{index}")))
+            })
+            .collect::<Vec<_>>();
+        if before_stats != (self.game.score, self.game.lines, self.game.level()) {
+            changed.push(UiId::from("stats"));
+        }
+        if before_next != self.game.next {
+            changed.push(UiId::from("next-cell"));
+        }
+        if before_status != (self.game.paused, self.game.over) {
+            changed.push(UiId::from("status"));
+        }
+        if let Some(mut pending) = self.changed_view_ids.take() {
+            pending.append(&mut changed);
+            pending.sort();
+            pending.dedup();
+            self.changed_view_ids = Some(pending);
+        } else {
+            self.changed_view_ids = Some(changed);
+        }
+    }
+
+    fn act(&mut self, action: &'static str) {
+        self.mutate_game(|game| game.act(action));
+    }
+
+    fn menu_view(&self) -> AnyView<Message> {
+        let mut actions = Column::new().gap(12.0);
+        if !self.game.over {
+            actions = actions.child(Button::new(Message::Continue, "Continue"));
+        }
+        actions = actions
+            .child(Button::new(Message::Restart, "New game"))
+            .child(Text::new("D-pad or left stick: move and soft drop").color(0xa9bdc9))
+            .child(Text::new("A: rotate · B: hard drop · Start: resume").color(0xa9bdc9));
+
+        AnyView::new(
+            Column::new()
+                .fill_width()
+                .fill_height()
+                .align_items(Align::Center)
+                .justify_content(Justify::Center)
+                .gap(18.0)
+                .padding(Insets::all(40.0))
+                .background(0x101820)
+                .foreground(0xeaf2f8)
+                .child(
+                    Text::new(if self.game.over {
+                        "Game over"
+                    } else {
+                        "Twinkle Blocks"
+                    })
+                    .font_size(42.0)
+                    .line_height(50.0),
+                )
+                .child(
+                    Text::new(format!(
+                        "Score {}  ·  Lines {}  ·  Level {}",
+                        self.game.score,
+                        self.game.lines,
+                        self.game.level()
+                    ))
+                    .color(0xa9bdc9),
+                )
+                .child(
+                    Container::new()
+                        .width(360.0)
+                        .padding(Insets::all(24.0))
+                        .background(0x1d2a35)
+                        .border(0x496274, 2.0)
+                        .radius(12.0)
+                        .child(actions),
+                ),
+        )
+    }
+
+    fn gameplay_view(&self) -> AnyView<Message> {
+        let cells = self.board().into_iter().enumerate().map(|(index, cell)| {
+            let color = cell.map(|shape| COLORS[shape as usize]).unwrap_or(0x17242d);
+            let cell_view = Container::new()
+                .id(UiId::from(format!("cell-{index}")))
+                .width(28.0)
+                .height(28.0)
+                .background(color)
+                .radius(3.0);
+            if cell.is_some() {
+                cell_view.border(0xd3fff8, 2.0)
+            } else {
+                cell_view
+            }
+        });
+        let board = Grid::fixed(W)
+            .gap(2.0)
+            .padding(Insets::all(8.0))
+            .background(0x263845)
+            .border_value(Border::new(0x496274, 2.0))
+            .radius(8.0)
+            .children(cells);
+        let status = if self.game.over {
+            "Stack topped out"
+        } else if self.game.paused {
+            "Ready — choose Start"
+        } else {
+            "In play"
+        };
+        let side = Column::new()
+            .width(210.0)
+            .gap(9.0)
+            .padding(Insets::all(12.0))
+            .background(0x1d2a35)
+            .child(
+                Container::new()
+                    .id(id!(status))
+                    .padding(Insets::all(8.0))
+                    .background(if self.game.over { 0x5a2134 } else { 0x15232d })
+                    .radius(5.0)
+                    .child(Text::new(status)),
+            )
+            .child(Text::new("Next"))
+            .child(
+                Container::new()
+                    .width(90.0)
+                    .height(68.0)
+                    .padding(Insets::all(12.0))
+                    .background(0x15232d)
+                    .child(
+                        Container::new()
+                            .id(id!(next_cell))
+                            .width(30.0)
+                            .height(30.0)
+                            .background(COLORS[self.game.next as usize])
+                            .border(0xf3eaff, 2.0),
+                    ),
+            )
+            .child(Text::new("Controls"))
+            .child(
+                Text::new("D-pad / left stick: move and drop · A: rotate · B: hard drop · Start: game menu. Keyboard: ↑/↓, Alt+←/→, Enter, Escape.")
+                    .color(0xa9bdc9)
+                    .wrap(true),
+            );
+
+        AnyView::new(
+            Column::new()
+                .fill_width()
+                .fill_height()
+                .padding(Insets::all(18.0))
+                .gap(16.0)
+                .background(0x101820)
+                .foreground(0xeaf2f8)
+                .child(
+                    Row::new()
+                        .align_items(Align::Center)
+                        .gap(14.0)
+                        .padding(Insets::all(10.0))
+                        .background(0x1d2a35)
+                        .child(Text::new("Twinkle Blocks").font_size(22.0).grow(1.0))
+                        .child(
+                            Text::new(format!(
+                                "Score {}  ·  Lines {}  ·  Level {}",
+                                self.game.score,
+                                self.game.lines,
+                                self.game.level()
+                            ))
+                            .id(id!(stats)),
+                        )
+                        .child(Text::new("Start / Esc: game menu").color(0xa9bdc9)),
+                )
+                .child(
+                    Row::new()
+                        .gap(18.0)
+                        .justify_content(Justify::Center)
+                        .align_items(Align::Start)
+                        .child(board)
+                        .child(side),
+                ),
+        )
+    }
+}
+
+impl Application for NativeBlocks {
+    type Message = Message;
+
+    fn update(&mut self, message: Message) {
+        match message {
+            Message::Continue => {
+                self.menu_open = false;
+                self.reset_input();
+                self.changed_view_ids = None;
+            }
+            Message::Restart => {
+                self.game.act("restart");
+                self.menu_open = false;
+                self.gravity_elapsed = Duration::ZERO;
+                self.reset_input();
+                self.changed_view_ids = None;
+            }
+        }
+    }
+
+    fn view(&self, _context: ViewContext) -> impl View<Message> {
+        if self.menu_open || self.game.over {
+            self.menu_view()
+        } else {
+            self.gameplay_view()
         }
     }
 
@@ -439,20 +507,12 @@ impl Application for Blocks {
             repeat,
         } = event.input
         {
-            if repeat {
-                return ControllerInputOutcome::handled(false);
-            }
-            if self.game.over {
+            if repeat || self.game.over {
                 return ControllerInputOutcome::handled(false);
             }
             self.menu_open = !self.menu_open;
-            self.axis_x = 0;
-            self.horizontal_direction = 0;
-            self.horizontal_elapsed = Duration::ZERO;
-            if let Err(error) = self.render() {
-                eprintln!("Game-menu render failed: {error}");
-                return ControllerInputOutcome::handled(false);
-            }
+            self.reset_input();
+            self.changed_view_ids = None;
             return ControllerInputOutcome::handled(true);
         }
         if let Input::Button {
@@ -461,15 +521,12 @@ impl Application for Blocks {
             repeat,
         } = event.input
         {
-            let gameplay_active = !self.menu_open && !self.game.paused && !self.game.over;
-            let changed = gameplay_active && edge == KeyEdge::Pressed && !repeat;
+            let active = !self.menu_open && !self.game.paused && !self.game.over;
+            let changed = active && edge == KeyEdge::Pressed && !repeat;
             if changed {
-                self.game.act("down");
-                if let Err(error) = self.render() {
-                    eprintln!("Controller action failed: {error}");
-                }
+                self.act("down");
             }
-            return if gameplay_active {
+            return if active {
                 ControllerInputOutcome::handled(changed)
             } else {
                 ControllerInputOutcome::unhandled()
@@ -478,7 +535,7 @@ impl Application for Blocks {
         if self.menu_open || self.game.paused || self.game.over {
             return ControllerInputOutcome::unhandled();
         }
-        let (action, changed) = match event.input {
+        let action = match event.input {
             Input::Button {
                 button,
                 edge: KeyEdge::Pressed,
@@ -487,16 +544,15 @@ impl Application for Blocks {
                 let action = match button {
                     ControllerButton::DPadLeft => Some("left"),
                     ControllerButton::DPadRight => Some("right"),
-                    ControllerButton::DPadDown => Some("down"),
+                    ControllerButton::DPadDown | ControllerButton::West => Some("down"),
                     ControllerButton::DPadUp | ControllerButton::South => Some("rotate"),
                     ControllerButton::East => Some("drop"),
-                    ControllerButton::West => Some("down"),
                     _ => None,
                 };
                 if repeat && !matches!(action, Some("left" | "right" | "down")) {
                     return ControllerInputOutcome::handled(false);
                 }
-                (action, action.is_some())
+                action
             }
             Input::Axis {
                 axis: ControllerAxis::LeftX,
@@ -512,27 +568,20 @@ impl Application for Blocks {
                 let action = (direction != 0 && direction != self.axis_x)
                     .then_some(if direction < 0 { "left" } else { "right" });
                 self.axis_x = direction;
-                (action, action.is_some())
+                action
             }
             Input::Axis {
                 axis: ControllerAxis::LeftY,
-                value,
-            } => {
-                let _ = value;
-                return ControllerInputOutcome::handled(false);
+                ..
             }
-            Input::RouteNeutralized | Input::Disconnected => {
-                return ControllerInputOutcome::handled(false);
-            }
+            | Input::RouteNeutralized
+            | Input::Disconnected => return ControllerInputOutcome::handled(false),
             _ => return ControllerInputOutcome::unhandled(),
         };
         if let Some(action) = action {
-            self.game.act(action);
-            if let Err(error) = self.render() {
-                eprintln!("Controller action failed: {error}");
-            }
+            self.act(action);
         }
-        ControllerInputOutcome::handled(changed)
+        ControllerInputOutcome::handled(action.is_some())
     }
 
     fn shortcut_outcome(&mut self, shortcut: Shortcut) -> ShortcutOutcome {
@@ -541,11 +590,9 @@ impl Application for Blocks {
                 return ShortcutOutcome::from_changed(false);
             }
             self.menu_open = !self.menu_open;
-            self.axis_x = 0;
-            self.horizontal_direction = 0;
-            self.horizontal_elapsed = Duration::ZERO;
-            let changed = self.render().is_ok();
-            return ShortcutOutcome::from_changed(changed);
+            self.reset_input();
+            self.changed_view_ids = None;
+            return ShortcutOutcome::from_changed(true);
         }
         if self.menu_open {
             return ShortcutOutcome::from_changed(false);
@@ -563,8 +610,7 @@ impl Application for Blocks {
             if (self.game.paused || self.game.over) && action != "restart" {
                 return ShortcutOutcome::from_changed(false);
             }
-            self.game.act(action);
-            let _ = self.render();
+            self.act(action);
             ShortcutOutcome::from_changed(true)
         } else {
             ShortcutOutcome::from_changed(false)
@@ -604,17 +650,16 @@ impl Application for Blocks {
         let soft_drop = input.button_down(&ControllerButton::DPadDown)
             || input.axis(&ControllerAxis::LeftY) > 0.65;
         if soft_drop {
-            self.game.act("down");
+            self.act("down");
         } else {
             self.gravity_elapsed += interval;
             if self.gravity_elapsed >= self.game.gravity_interval() {
                 self.gravity_elapsed = self
                     .gravity_elapsed
                     .saturating_sub(self.game.gravity_interval());
-                self.game.gravity_tick();
+                self.mutate_game(Game::gravity_tick);
             }
         }
-
         let axis_x = input.axis(&ControllerAxis::LeftX);
         let horizontal = if input.button_down(&ControllerButton::DPadLeft) || axis_x < -0.65 {
             -1
@@ -629,23 +674,18 @@ impl Application for Blocks {
         } else {
             self.horizontal_elapsed += interval;
             if self.horizontal_elapsed >= Duration::from_millis(150) {
-                self.game.act(if horizontal < 0 { "left" } else { "right" });
+                self.act(if horizontal < 0 { "left" } else { "right" });
                 self.horizontal_elapsed = Duration::from_millis(100);
             }
         }
-        match self.render() {
-            Ok(()) => true,
-            Err(error) => {
-                eprintln!("Game tick render failed: {error}");
-                false
-            }
-        }
+        true
     }
-    fn view(&self, _context: ViewContext) -> impl View<PluginMessage> {
-        self.accepted.node().view(&self.images, &self.stylesheet)
-    }
+
     fn title(&self) -> &str {
         "Twinkle Blocks"
+    }
+    fn initial_size(&self) -> (u32, u32) {
+        (800, 720)
     }
 
     fn take_changed_view_ids(&mut self) -> Option<Vec<UiId>> {
@@ -653,213 +693,71 @@ impl Application for Blocks {
     }
 }
 
+fn validate() -> Result<(), Box<dyn std::error::Error>> {
+    let mut timing = Game::default();
+    let level_one_gravity = timing.gravity_interval();
+    timing.lines = 20;
+    if timing.level() != 3 || timing.gravity_interval() >= level_one_gravity {
+        return Err("gravity cadence does not accelerate with level".into());
+    }
+    let mut bag = Game::default();
+    for _ in 0..2 {
+        let mut seen = [false; 7];
+        for _ in 0..7 {
+            seen[bag.draw_piece() as usize] = true;
+        }
+        if !seen.into_iter().all(|piece| piece) {
+            return Err("the seven-piece bag omitted or repeated a shape".into());
+        }
+    }
+    let mut app = NativeBlocks::default();
+    let mut ticks = 0;
+    for _ in 0..400 {
+        if !app.poll_controller(&ControllerSnapshot::default()) {
+            break;
+        }
+        ticks += 1;
+    }
+    if !app.game.over || ticks < 40 {
+        return Err(format!("polling stopped after {ticks} ticks without a normal top-out").into());
+    }
+    let mut host = twinkle_ui::UiHost::new(NativeBlocks::default(), 800, 720);
+    let tree = host.inspect().resources;
+    println!(
+        "Gameplay component tree: {} bytes ({:.1} KiB), {} resolved nodes, {} retained nodes, {} paint primitives, {} accessibility nodes.",
+        tree.estimated_retained_bytes,
+        tree.estimated_retained_bytes as f64 / 1024.0,
+        tree.node_count,
+        tree.retained_node_count,
+        tree.paint_primitive_count,
+        tree.accessibility_node_count,
+    );
+    host.application_mut().act("left");
+    let incremental = host.step(twinkle_ui::HostBatch {
+        application_changed: true,
+        ..twinkle_ui::HostBatch::default()
+    });
+    if incremental.telemetry.nodes_measured >= tree.node_count {
+        return Err(format!(
+            "targeted native update measured {} of {} nodes",
+            incremental.telemetry.nodes_measured, tree.node_count
+        )
+        .into());
+    }
+    println!(
+        "Targeted movement measured {} of {} nodes and emitted {} commands.",
+        incremental.telemetry.nodes_measured,
+        tree.node_count,
+        incremental.telemetry.paint_commands_emitted,
+    );
+    println!("Native Rust view survived {ticks} gravity ticks and reached a normal top-out.");
+    Ok(())
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     match std::env::args().nth(1).as_deref() {
-        None => twinkle_ui::run(Blocks::new()?),
-        Some("--validate") => {
-            let mut timing = Game::default();
-            let level_one_gravity = timing.gravity_interval();
-            timing.lines = 20;
-            if timing.level() != 3 || timing.gravity_interval() >= level_one_gravity {
-                return Err("gravity cadence does not accelerate with level".into());
-            }
-            let mut bag = Game::default();
-            for _ in 0..2 {
-                let mut seen = [false; 7];
-                for _ in 0..7 {
-                    seen[bag.draw_piece() as usize] = true;
-                }
-                if !seen.into_iter().all(|piece| piece) {
-                    return Err("the seven-piece bag omitted or repeated a shape".into());
-                }
-            }
-            let mut square = Game {
-                shape: 0,
-                ..Game::default()
-            };
-            square.act("rotate");
-            if square.rotation != 0 || square.coords() != SHAPES[0] {
-                return Err("the square piece changed geometry when rotated".into());
-            }
-            let mut wall_kick = Game {
-                shape: 1,
-                x: 7,
-                rotation: 1,
-                ..Game::default()
-            };
-            wall_kick.act("rotate");
-            if wall_kick.rotation != 2 || wall_kick.x != 6 {
-                return Err("the line piece did not apply its bounded wall kick".into());
-            }
-
-            let mut app = Blocks::new()?;
-            let down = |edge| ApplicationControllerEvent {
-                device: ControllerId(1),
-                family: ControllerFamily::Xbox,
-                backend_order: 1,
-                produced_unix_ms: 1,
-                input: ApplicationControllerInput::Button {
-                    button: ControllerButton::DPadDown,
-                    edge,
-                    repeat: false,
-                },
-            };
-            let mut input_host = twinkle_ui::UiHost::new(Blocks::new()?, 800, 720);
-            let tree = input_host.inspect().resources;
-            println!(
-                "Gameplay component tree: {} bytes ({:.1} KiB), {} resolved nodes, {} retained nodes, {} paint primitives, {} accessibility nodes.",
-                tree.estimated_retained_bytes,
-                tree.estimated_retained_bytes as f64 / 1024.0,
-                tree.node_count,
-                tree.retained_node_count,
-                tree.paint_primitive_count,
-                tree.accessibility_node_count,
-            );
-            input_host.handle_application_controller_input(down(KeyEdge::Pressed));
-            if input_host
-                .application()
-                .poll_interval_controller(input_host.controller_snapshot())
-                != Some(input_host.application().game.soft_drop_interval())
-            {
-                return Err("held Down did not select the soft-drop cadence".into());
-            }
-            input_host.handle_application_controller_input(down(KeyEdge::Released));
-            if input_host
-                .application()
-                .poll_interval_controller(input_host.controller_snapshot())
-                != Some(input_host.application().game.gravity_interval())
-            {
-                return Err("released Down did not restore gravity cadence".into());
-            }
-
-            let mut horizontal_host = twinkle_ui::UiHost::new(Blocks::new()?, 800, 720);
-            horizontal_host.handle_application_controller_input(ApplicationControllerEvent {
-                device: ControllerId(1),
-                family: ControllerFamily::Xbox,
-                backend_order: 1,
-                produced_unix_ms: 1,
-                input: ApplicationControllerInput::Button {
-                    button: ControllerButton::DPadLeft,
-                    edge: KeyEdge::Pressed,
-                    repeat: false,
-                },
-            });
-            let immediate_x = horizontal_host.application().game.x;
-            for _ in 0..4 {
-                horizontal_host.poll();
-            }
-            if horizontal_host.application().game.x >= immediate_x {
-                return Err("held Left did not auto-shift after its initial move".into());
-            }
-
-            let mut ticks = 0;
-            let neutral_input = ControllerSnapshot::default();
-            for _ in 0..400 {
-                if !app.poll_controller(&neutral_input) {
-                    break;
-                }
-                ticks += 1;
-            }
-            if !app.game.over || ticks < 40 {
-                return Err(format!(
-                    "polling stopped after {ticks} ticks without a normal top-out"
-                )
-                .into());
-            }
-            if app.accepted.node().button_action("continue").is_some()
-                || app.accepted.node().button_action("restart").is_none()
-            {
-                return Err("game over did not present New game without Continue".into());
-            }
-            let start = || ApplicationControllerEvent {
-                device: ControllerId(1),
-                family: ControllerFamily::Xbox,
-                backend_order: 1,
-                produced_unix_ms: 1,
-                input: ApplicationControllerInput::Button {
-                    button: ControllerButton::Start,
-                    edge: KeyEdge::Pressed,
-                    repeat: false,
-                },
-            };
-            let outcome = app.controller_input(start());
-            if outcome.changed || app.menu_open {
-                return Err("controller Start dismissed the terminal game-over screen".into());
-            }
-
-            app = Blocks::new()?;
-            let outcome = app.controller_input(start());
-            if !outcome.changed || !app.menu_open {
-                return Err(
-                    "controller Start did not open the conditional game-menu screen".into(),
-                );
-            }
-            let continue_action = app
-                .accepted
-                .node()
-                .button_action("continue")
-                .ok_or("conditional menu screen is missing its Continue action")?;
-            let mut host = twinkle_ui::UiHost::new(app, 800, 720);
-            host.step(twinkle_ui::HostBatch {
-                application_changed: true,
-                ..twinkle_ui::HostBatch::default()
-            });
-            if !host
-                .semantic_nodes()
-                .iter()
-                .any(|node| node.name.as_deref() == Some("New game"))
-            {
-                return Err(format!(
-                    "the conditional JSX game menu did not expose its actions: semantics={:?}",
-                    host.semantic_nodes()
-                        .iter()
-                        .filter_map(|node| node.name.as_deref())
-                        .collect::<Vec<_>>()
-                )
-                .into());
-            }
-            host.application_mut()
-                .update(PluginMessage::Click(continue_action));
-            host.step(twinkle_ui::HostBatch {
-                application_changed: true,
-                ..twinkle_ui::HostBatch::default()
-            });
-            if host.application().menu_open
-                || host
-                    .semantic_nodes()
-                    .iter()
-                    .any(|node| node.name.as_deref() == Some("Continue"))
-            {
-                return Err("Continue did not replace the menu with gameplay".into());
-            }
-            let mut controller_host = twinkle_ui::UiHost::new(Blocks::new()?, 800, 720);
-            let outcome = controller_host.handle_application_controller_input(start());
-            if !outcome.changed
-                || !controller_host.application().menu_open
-                || !controller_host
-                    .semantic_nodes()
-                    .iter()
-                    .any(|node| node.name.as_deref() == Some("New game"))
-            {
-                return Err("physical controller Start did not present the menu screen".into());
-            }
-            controller_host.handle_application_controller_input(start());
-            if controller_host.application().menu_open
-                || controller_host.inspect().controller_target.is_some()
-                || controller_host
-                    .semantic_nodes()
-                    .iter()
-                    .any(|node| node.name.as_deref() == Some("Continue"))
-            {
-                return Err(
-                    "closing the menu retained menu focus instead of returning to gameplay".into(),
-                );
-            }
-            println!(
-                "JSX render survived {ticks} gravity ticks and switched cleanly between gameplay and its menu screen."
-            );
-            Ok(())
-        }
+        None => twinkle_ui::run(NativeBlocks::default()),
+        Some("--validate") => validate(),
         _ => Err("usage: twinkle-blocks [--validate]".into()),
     }
 }

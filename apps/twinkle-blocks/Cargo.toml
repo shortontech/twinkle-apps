@@ -7,7 +7,3 @@ rust-version.workspace = true
 
 [dependencies]
 twinkle-ui.workspace = true
-twinkle-presentation.workspace = true
-twinkle-jsx-runtime.workspace = true
-twinkle-protocol.workspace = true
-serde_json.workspace = true
