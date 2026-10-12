@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/twinkle-notes", "apps/twinkle-blocks"]
+members = ["apps/twinkle-notes", "apps/twinkle-blocks", "benchmarks/iced-blocks"]
 
 [workspace.package]
 edition = "2024"
@@ -8,8 +8,9 @@ license = "MIT OR Apache-2.0"
 rust-version = "1.96"
 
 [workspace.dependencies]
-twinkle-ui = { path = "../twinkle/crates/twinkle" }
-twinkle-presentation = { path = "../twinkle/crates/twinkle-presentation", features = ["jsx"] }
-twinkle-jsx-runtime = { path = "../twinkle/crates/twinkle-jsx-runtime" }
-twinkle-protocol = { path = "../twinkle/crates/twinkle-protocol" }
+twinkle-ui = { git = "https://github.com/shortontech/twinkle.git", rev = "7f040fa55061b97d258d4ef88b31b01c74f914f1" }
+twinkle-presentation = { git = "https://github.com/shortontech/twinkle.git", rev = "7f040fa55061b97d258d4ef88b31b01c74f914f1", features = ["jsx"] }
+twinkle-jsx-runtime = { git = "https://github.com/shortontech/twinkle.git", rev = "7f040fa55061b97d258d4ef88b31b01c74f914f1" }
+twinkle-protocol = { git = "https://github.com/shortontech/twinkle.git", rev = "7f040fa55061b97d258d4ef88b31b01c74f914f1" }
 serde_json = "1"
+iced = { version = "0.14", features = ["smol"] }

@@ -1,9 +1,9 @@
 # Twinkle test apps
 
 This repository contains small standalone applications built with the Twinkle
-UI engine in the sibling `../twinkle` checkout. Their purpose is to exercise
-Twinkle as an application developer would and record cases where Twinkle's
-documentation does not give enough information to use an API confidently.
+UI engine. Their purpose is to exercise Twinkle as an application developer
+would and record cases where Twinkle's documentation does not give enough
+information to use an API confidently.
 
 ## Apps
 
@@ -13,10 +13,15 @@ documentation does not give enough information to use an API confidently.
   exercising a JSX menu, application-owned render buffer, and direct keyboard
   and controller input.
 
+## Benchmarks
+
+- [`iced-blocks`](benchmarks/iced-blocks/README.md): an independent Rust/Iced
+  falling-block implementation for framework comparisons.
+
 ## Run
 
 From this repository root, run an app with `cargo run -p twinkle-notes` or
-`cargo run -p twinkle-blocks`.
+`cargo run -p twinkle-blocks`, or `cargo run -p iced-blocks`.
 Twinkle's getting-started guide covers the native platform prerequisites.
 
 Documentation gaps and any source searches needed to resolve them are logged
