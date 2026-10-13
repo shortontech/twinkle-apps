@@ -455,7 +455,10 @@ impl Application for Blocks {
             | PluginMessage::Text(a, _)
             | PluginMessage::Value(a, _) => Some(a),
             PluginMessage::Button { click, .. } => Some(click),
-            PluginMessage::Scroll | PluginMessage::Drag(..) | PluginMessage::Drop(..) => None,
+            PluginMessage::Scroll
+            | PluginMessage::Drag(..)
+            | PluginMessage::Drop(..)
+            | PluginMessage::Chart(..) => None,
         };
         if let Some(action) = action {
             if let Err(error) = self.dispatch(action) {
