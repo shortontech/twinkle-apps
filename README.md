@@ -7,6 +7,10 @@ information to use an API confidently.
 
 ## Apps
 
+- [`twinkle-security`](apps/twinkle-security/README.md): a deterministic synthetic
+  security dashboard with four 10 Hz graphs and heatmaps up to 20,000 cells, plus
+  native submission and Wayland presentation benchmarks.
+
 - [`twinkle-notes`](apps/twinkle-notes/README.md): a simple Notepad-style
   multiline text editor with path-based open and save.
 - [`twinkle-blocks`](apps/twinkle-blocks/README.md): a Rust-only falling-block
@@ -22,7 +26,8 @@ information to use an API confidently.
 
 ## Run
 
-From this repository root, run an app with `cargo run -p twinkle-notes`,
+From this repository root, run an app with `cargo run --release -p twinkle-security`,
+`cargo run -p twinkle-notes`,
 `cargo run -p twinkle-blocks`, `cargo run -p twinkle-blocks-jsx`, or
 `cargo run -p iced-blocks`.
 Twinkle's getting-started guide covers the native platform prerequisites.
