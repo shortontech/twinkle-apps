@@ -1,0 +1,254 @@
+{
+  "metadata": {
+    "allocation_metrics": null,
+    "app_dirty": true,
+    "app_revision": "cc4c97ea6670d94ff6a1bdf7261ba2aad3384a97",
+    "architecture": "x86_64",
+    "build_profile": "release",
+    "cpu": "model name\t: AMD Ryzen 9 5900X 12-Core Processor",
+    "device_scale": null,
+    "display_refresh_hz": null,
+    "engine_revision": "ab1f554f5c0baf829e32d38567793ef4af8c259c",
+    "event": "metadata",
+    "generator_version": 1,
+    "gpu_candidates": [
+      "3e:00.0 VGA compatible controller: NVIDIA Corporation AD103 [GeForce RTX 4080 SUPER] (rev a1)"
+    ],
+    "gpu_execution_us": null,
+    "instrumentation": "Instant CPU durations + per-tick RSS; report buffering outside timed preparation",
+    "limits": "ChartLimits { max_rows: 30000, max_series: 256, max_facets: 64, max_layers: 8, max_transforms: 32, max_geometry_vertices: 300000, max_ticks_per_axis: 256, max_annotations: 1024, max_visible_table_rows: 256, max_columns: 256, max_label_bytes: 4096, max_total_label_bytes: 8388608, max_steady_bytes: 134217728, max_peak_bytes: 268435456 }",
+    "mode": "native window",
+    "os": "linux",
+    "paced": true,
+    "pipeline_trace": "/external/projects/twinkle-apps/target/security-evidence/gpu-standard-fixed-pipeline.jsonl",
+    "preset": "standard",
+    "requested_renderer": "gpu",
+    "rss_sampling": "Linux /proc/self/status VmRSS, once per measured tick",
+    "rss_start_kib": 15708,
+    "schema": "twinkle-security-v1",
+    "seed": 42,
+    "source_checksum": "1855781b51f7a52f0fb016a8c1c061a4b35950991a0eff9bc38aa067a073009a",
+    "start_tick": 0,
+    "ticks": 3000,
+    "warmup_ticks": 100,
+    "window_logical": [
+      1640,
+      1020
+    ]
+  },
+  "native_capabilities": [
+    {
+      "actual_renderer": "gpu",
+      "device_scale": 1.0,
+      "event": "native_capabilities",
+      "physical_size": [
+        1640,
+        1020
+      ],
+      "presentation_supported": true,
+      "schema": "twinkle-security-v1"
+    }
+  ],
+  "summary": {
+    "accepted": 3000,
+    "coalesced_or_unsubmitted": 0,
+    "cpu_submission_us": {
+      "max": 22036,
+      "p50": 4362,
+      "p95": 5362,
+      "p99": 6542,
+      "samples": 3000
+    },
+    "declaration_us": {
+      "max": 76,
+      "p50": 6,
+      "p95": 8,
+      "p99": 11,
+      "samples": 3000
+    },
+    "dispatch_lateness_us": {
+      "max": 114082,
+      "p50": 2521,
+      "p95": 4805,
+      "p99": 4974,
+      "samples": 3000
+    },
+    "dropped": 0,
+    "duplicate_submission_acks": 0,
+    "event": "summary",
+    "generation_us": {
+      "max": 30,
+      "p50": 8,
+      "p95": 13,
+      "p99": 16,
+      "samples": 3000
+    },
+    "host_update_us": {
+      "max": 111717,
+      "p50": 9000,
+      "p95": 10966,
+      "p99": 12518,
+      "samples": 3000
+    },
+    "last_accepted_tick": 3000,
+    "last_generated_tick": 3000,
+    "layout_us": {
+      "max": 103736,
+      "p50": 1009,
+      "p95": 1253,
+      "p99": 1841,
+      "samples": 3000
+    },
+    "missed_presentation_deadlines": 6,
+    "missed_submission_or_update_deadlines": 4,
+    "model_checksum": "da9947ed97b2c214dba05c89d0c93291e06bc7d7c624a920711f9ef0de9c0125",
+    "preparation_us": [
+      {
+        "max": 4248,
+        "p50": 1031,
+        "p95": 1300,
+        "p99": 1578,
+        "samples": 3000
+      },
+      {
+        "max": 5447,
+        "p50": 2750,
+        "p95": 3414,
+        "p99": 4002,
+        "samples": 3000
+      },
+      {
+        "max": 247,
+        "p50": 51,
+        "p95": 68,
+        "p99": 86,
+        "samples": 3000
+      },
+      {
+        "max": 1226,
+        "p50": 119,
+        "p95": 214,
+        "p99": 308,
+        "samples": 3000
+      }
+    ],
+    "presentation_latency_us": {
+      "max": 139129,
+      "p50": 27455,
+      "p95": 31349,
+      "p99": 38632,
+      "samples": 3000
+    },
+    "presentation_ordered": true,
+    "presentation_supported": true,
+    "presented": 3000,
+    "processed": 3000,
+    "projection_us": {
+      "max": 5484,
+      "p50": 2996,
+      "p95": 3841,
+      "p99": 4398,
+      "samples": 3000
+    },
+    "queue_high_water": 3,
+    "reason": "missing, discarded, out-of-order, or late presentations",
+    "report_serialization_us": 12538,
+    "reported_refresh_interval_ns": {
+      "max": 16666666,
+      "p50": 4170837,
+      "p95": 4170837,
+      "p99": 4170837,
+      "samples": 3000
+    },
+    "rss_exit_kib": 256128,
+    "rss_peak_sample_kib": 256632,
+    "schema": "twinkle-security-v1",
+    "status": "fail",
+    "submission_latency_us": {
+      "max": 126673,
+      "p50": 16186,
+      "p95": 19630,
+      "p99": 30496,
+      "samples": 3000
+    },
+    "submission_status": "fail",
+    "submitted": 3000,
+    "unacknowledged_revisions": [],
+    "unknown_submission_acks": 0,
+    "update_status": "fail",
+    "warmup_excluded": true
+  },
+  "rss_by_500_ticks": [
+    {
+      "ticks": [
+        1,
+        500
+      ],
+      "min_kib": 203704,
+      "max_kib": 220292
+    },
+    {
+      "ticks": [
+        501,
+        1000
+      ],
+      "min_kib": 216280,
+      "max_kib": 227500
+    },
+    {
+      "ticks": [
+        1001,
+        1500
+      ],
+      "min_kib": 224132,
+      "max_kib": 243860
+    },
+    {
+      "ticks": [
+        1501,
+        2000
+      ],
+      "min_kib": 238032,
+      "max_kib": 246740
+    },
+    {
+      "ticks": [
+        2001,
+        2500
+      ],
+      "min_kib": 241468,
+      "max_kib": 251072
+    },
+    {
+      "ticks": [
+        2501,
+        3000
+      ],
+      "min_kib": 247956,
+      "max_kib": 256632
+    }
+  ],
+  "heat_cell_size": [
+    6.8896803855896,
+    5.0286664962768555
+  ],
+  "changed_heat_cells": {
+    "min": 914,
+    "max": 4805
+  },
+  "deadline_miss_ticks": [
+    607,
+    919,
+    1856,
+    2532,
+    2844,
+    2989
+  ],
+  "actual_gpu_adapter": {
+    "adapter": "AdapterInfo { name: \"NVIDIA GeForce RTX 4080 SUPER\", vendor: 4318, device: 9986, device_type: DiscreteGpu, device_pci_bus_id: \"0000:3e:00.0\", driver: \"NVIDIA\", driver_info: \"595.99.02\", backend: Vulkan, subgroup_min_size: 32, subgroup_max_size: 32, transient_saves_memory: Some(false), limit_bucket: None }",
+    "elapsed_us": 179350,
+    "event": "gpu_adapter",
+    "pid": 1924268,
+    "sequence": 8
+  }
+}
