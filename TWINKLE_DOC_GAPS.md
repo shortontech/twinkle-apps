@@ -165,3 +165,27 @@ when the documentation did not resolve the question.
 - Documentation gap: document the native deadline → poll → changed-result
   invalidation path and how to diagnose an app that remains alive but appears
   visually frozen.
+
+## 2026-10-12 — Dense security dashboard consumer
+
+The security dashboard integration found explicit heatmap color and bubble size
+domains were ignored during painting. Categorical axis guides painted numeric
+positions rather than admitted service/source labels. Fixes and regression tests
+are on Twinkle branch `security-dashboard-chart-support`, pinned by this workspace.
+Numeric color and per-tier bubble legends are declared by the app because the
+current native legend path consumes Series encodings.
+
+Native benchmark attribution previously ended at CPU submission. The engine now
+exposes captured `NativeFrameCorrelation` submission callbacks and optional Linux
+Wayland `wp_presentation` callbacks. The public boundaries and limitations are
+documented in Twinkle `docs/chart-performance.md`. Initial frames capture their
+correlation, including zero-warm-up runs. No platform screen-reader bridge or GPU
+execution timing is claimed.
+
+A full 3,000-tick run additionally exposed stale output reuse above layout-generated
+children. The consumer's prepared data changed while ancestor paint/interaction
+reuse could preserve previous generated output. The engine now excludes layout
+callbacks and their ancestry from bulk resolved and independent output reuse.
+Its regression changes both generated content and IDs and checks current paint
+plus bounded interaction records. This also removed increasing layout cost and
+large retained-frame growth in the dashboard benchmark.
