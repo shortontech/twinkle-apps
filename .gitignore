@@ -1,2 +1,7 @@
 /target/
 /specs/
+
+/benchmark-artifacts/
+/benchmarks/0012/react/node_modules/
+/benchmarks/0012/react/dist/
+__pycache__/

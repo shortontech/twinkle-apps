@@ -455,10 +455,8 @@ impl Application for Blocks {
             | PluginMessage::Text(a, _)
             | PluginMessage::Value(a, _) => Some(a),
             PluginMessage::Button { click, .. } => Some(click),
-            PluginMessage::Scroll
-            | PluginMessage::Drag(..)
-            | PluginMessage::Drop(..)
-            | PluginMessage::Chart(..) => None,
+            // Other workspace consumers can enable additional chart messages.
+            _ => None,
         };
         if let Some(action) = action {
             if let Err(error) = self.dispatch(action) {

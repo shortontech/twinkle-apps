@@ -6,6 +6,7 @@ members = [
     "apps/twinkle-blocks",
     "apps/twinkle-blocks-jsx",
     "benchmarks/iced-blocks",
+    "benchmarks/twinkle",
 ]
 
 [workspace.package]
@@ -14,10 +15,13 @@ license = "MIT OR Apache-2.0"
 rust-version = "1.96"
 
 [workspace.dependencies]
-twinkle-charts = { git = "https://github.com/shortontech/twinkle.git", rev = "ab1f554f5c0baf829e32d38567793ef4af8c259c" }
-twinkle-ui = { git = "https://github.com/shortontech/twinkle.git", rev = "ab1f554f5c0baf829e32d38567793ef4af8c259c" }
-twinkle-presentation = { git = "https://github.com/shortontech/twinkle.git", rev = "ab1f554f5c0baf829e32d38567793ef4af8c259c", features = ["jsx"] }
-twinkle-jsx-runtime = { git = "https://github.com/shortontech/twinkle.git", rev = "ab1f554f5c0baf829e32d38567793ef4af8c259c" }
-twinkle-protocol = { git = "https://github.com/shortontech/twinkle.git", rev = "ab1f554f5c0baf829e32d38567793ef4af8c259c" }
+twinkle-charts = { git = "https://github.com/shortontech/twinkle.git", rev = "870f7a991c3f98264e94841fe91b7af2d3250190" }
+twinkle-ui = { git = "https://github.com/shortontech/twinkle.git", rev = "870f7a991c3f98264e94841fe91b7af2d3250190" }
+twinkle-presentation = { git = "https://github.com/shortontech/twinkle.git", rev = "870f7a991c3f98264e94841fe91b7af2d3250190", features = ["jsx"] }
+twinkle-jsx-runtime = { git = "https://github.com/shortontech/twinkle.git", rev = "870f7a991c3f98264e94841fe91b7af2d3250190" }
+twinkle-protocol = { git = "https://github.com/shortontech/twinkle.git", rev = "870f7a991c3f98264e94841fe91b7af2d3250190" }
 serde_json = "1"
 iced = { version = "0.14", features = ["smol"] }
+
+twinkle-redux = { git = "https://github.com/shortontech/twinkle.git", rev = "870f7a991c3f98264e94841fe91b7af2d3250190" }
+twinkle-redux-jsx = { git = "https://github.com/shortontech/twinkle.git", rev = "870f7a991c3f98264e94841fe91b7af2d3250190" }

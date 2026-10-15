@@ -21,6 +21,9 @@ information to use an API confidently.
 
 ## Benchmarks
 
+- [Twinkle benchmark suite](benchmarks/README.md): pipeline/React comparisons,
+  chart and compound-control workloads, Redux timings, samplers and paired runners.
+
 - [`iced-blocks`](benchmarks/iced-blocks/README.md): an independent Rust/Iced
   falling-block implementation for framework comparisons.
 
